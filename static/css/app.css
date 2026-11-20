@@ -179,10 +179,9 @@ a.btn-secondary:hover { color: var(--ink); }
 .scope-banner p { flex: 1 1 240px; font-size: 14px; }
 .table-toolbar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; padding: 16px clamp(20px, 4vw, 32px); border-bottom: 1px solid var(--border-soft); }
 .table-toolbar h2 { margin: 0; font-size: 16px; font-weight: 600; }
-.toolbar-actions { display: flex; align-items: center; gap: 8px; flex: 0 1 380px; }
-.table-toolbar form { flex: 1 1 auto; margin: 0; }
-.table-toolbar form.refresh-form { flex: none; }
-.btn-compact { height: 40px; }
+.table-toolbar form { flex: 0 1 280px; margin: 0; }
+.refresh-form { margin: 0; }
+.refresh-form .btn { gap: 8px; }
 .picker-meta { display: flex; justify-content: space-between; align-items: center; gap: 12px; font-size: 13px; color: var(--muted); }
 .picker-meta .link-button { font-size: 13px; }
 .table-toolbar .input { height: 40px; }

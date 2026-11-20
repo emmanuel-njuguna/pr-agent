@@ -21,6 +21,15 @@
       </div>
     </div>
     <div class="connection-actions">
+      {% if connection.status == "active" %}
+        <form class="refresh-form" method="post" action="{% url 'github:refresh' %}">
+          {% csrf_token %}
+          <button class="btn btn-secondary btn-inline" type="submit" title="Re-read the repository list from GitHub">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a9 9 0 11-2.64-6.36"></path><path d="M21 4v5h-5"></path></svg>
+            Refresh
+          </button>
+        </form>
+      {% endif %}
       <a class="btn btn-secondary btn-inline" href="{{ connection.manage_url }}" target="_blank" rel="noopener">Manage on GitHub</a>
       <details class="disconnect">
         <summary class="btn btn-secondary btn-inline">Disconnect</summary>
@@ -52,18 +61,10 @@
   <section class="card" aria-labelledby="repositories-heading">
     <div class="table-toolbar">
       <h2 id="repositories-heading">Repositories</h2>
-      <div class="toolbar-actions">
-        <form method="get" role="search">
-          <label class="sr-only" for="q">Search repositories</label>
-          <input class="input" id="q" type="search" name="q" value="{{ query }}" placeholder="Search repositories">
-        </form>
-        {% if connection.status == "active" %}
-          <form class="refresh-form" method="post" action="{% url 'github:refresh' %}">
-            {% csrf_token %}
-            <button class="btn btn-secondary btn-inline btn-compact" type="submit" title="Re-read the repository list from GitHub">Refresh</button>
-          </form>
-        {% endif %}
-      </div>
+      <form method="get" role="search">
+        <label class="sr-only" for="q">Search repositories</label>
+        <input class="input" id="q" type="search" name="q" value="{{ query }}" placeholder="Search repositories">
+      </form>
     </div>
     {% if page.object_list %}
       <div class="table-wrap">
