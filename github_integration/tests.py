@@ -1,5 +1,6 @@
 import hashlib
 import hmac
+import io
 import json
 import tempfile
 from unittest import mock
@@ -9,6 +10,7 @@ from allauth.account.models import EmailAddress
 from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric import rsa
 from django.apps import apps
+from django.core.management import CommandError, call_command
 from django.test import TestCase, override_settings
 from django.urls import reverse
 from django.utils import timezone
@@ -212,6 +214,15 @@ class WebhookTests(TestCase):
         self.connection.refresh_from_db()
         self.assertEqual(self.connection.status, GitHubConnection.Status.NEEDS_ATTENTION)
 
+    def test_url_without_trailing_slash_is_accepted(self):
+        # smee-client strips the trailing slash; this used to be a 500 from APPEND_SLASH
+        body = json.dumps(self.pull_request(10)).encode()
+        signature = 'sha256=' + hmac.new(WEBHOOK_SECRET.encode(), body, hashlib.sha256).hexdigest()
+        response = self.client.post('/github/webhook', body, content_type='application/json', HTTP_X_GITHUB_EVENT='pull_request',
+                                    HTTP_X_GITHUB_DELIVERY='no-slash', HTTP_X_HUB_SIGNATURE_256=signature)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(PullRequestEvent.objects.count(), 1)
+
     def test_installation_repositories_added_and_removed(self):
         self.send('installation_repositories', {
             'action': 'added', 'installation': {'id': 42},
@@ -219,6 +230,63 @@ class WebhookTests(TestCase):
             'repositories_removed': [{'id': 11}],
         })
         self.assertEqual(sorted(self.connection.repositories.values_list('full_name', flat=True)), ['ada/app', 'ada/new'])
+
+
+class RefreshTests(TestCase):
+    def setUp(self):
+        self.user = make_user('ada@example.com')
+        self.connection = make_connection(self.user, 42, repos=[(10, 'ada/app')], monitor_all=True)
+        self.client.force_login(self.user)
+
+    @mock.patch.object(github_api, 'installation_repositories', return_value=[
+        {'id': 10, 'full_name': 'ada/app', 'private': True}, {'id': 12, 'full_name': 'ada/new-repo', 'private': False},
+    ])
+    def test_refresh_picks_up_a_newly_created_repository(self, _):
+        response = self.client.post(reverse('github:refresh'))
+        self.assertRedirects(response, reverse('home'))
+        self.assertEqual(sorted(self.connection.repositories.values_list('full_name', flat=True)), ['ada/app', 'ada/new-repo'])
+        self.assertTrue(self.connection.repositories.get(github_id=12).is_monitored)
+
+    @mock.patch.object(github_api, 'installation_repositories', side_effect=github_api.GitHubError('down', 502))
+    def test_refresh_keeps_repositories_when_github_is_down(self, _):
+        self.client.post(reverse('github:refresh'))
+        self.assertEqual(self.connection.repositories.count(), 1)
+
+    def test_refresh_only_goes_back_to_setup_never_elsewhere(self):
+        with mock.patch.object(github_api, 'installation_repositories', return_value=[]):
+            response = self.client.post(reverse('github:refresh'), {'next': 'https://evil.example/'})
+        self.assertRedirects(response, reverse('home'))
+
+
+@override_settings(GITHUB_APP_ID='1', GITHUB_APP_PRIVATE_KEY_PATH='/k.pem', GITHUB_WEBHOOK_SECRET=WEBHOOK_SECRET)
+class WebhookCommandTests(TestCase):
+    def run_command(self, *args):
+        out = io.StringIO()
+        call_command('github_webhook', *args, stdout=out)
+        return out.getvalue()
+
+    @mock.patch.object(github_api, 'set_webhook_url', side_effect=lambda url: url)
+    def test_set_points_github_at_this_application(self, set_webhook_url):
+        out = self.run_command('--set', 'https://pragent.example.com/')
+        set_webhook_url.assert_called_once_with('https://pragent.example.com/github/webhook/')
+        self.assertIn('https://pragent.example.com/github/webhook/', out)
+
+    @override_settings(PUBLIC_BASE_URL='https://pragent.example.com')
+    @mock.patch.object(github_api, 'set_webhook_url', side_effect=lambda url: url)
+    def test_set_defaults_to_public_base_url(self, set_webhook_url):
+        self.run_command('--set')
+        set_webhook_url.assert_called_once_with('https://pragent.example.com/github/webhook/')
+
+    @mock.patch.object(github_api, 'set_webhook_url')
+    def test_refuses_plain_http_and_localhost(self, set_webhook_url):
+        for base_url in ('http://pragent.example.com', 'https://localhost:8000', 'pragent.example.com'):
+            with self.assertRaises(CommandError):
+                self.run_command('--set', base_url)
+        set_webhook_url.assert_not_called()
+
+    @mock.patch.object(github_api, 'webhook_url', return_value='https://smee.io/abc')
+    def test_without_set_only_shows_the_current_url(self, _):
+        self.assertIn('https://smee.io/abc', self.run_command())
 
 
 class SecretsTests(TestCase):

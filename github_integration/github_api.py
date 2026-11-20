@@ -42,6 +42,17 @@ def app_jwt():
     return jwt.encode({'iat': now - 60, 'exp': now + 9 * 60, 'iss': str(settings.GITHUB_APP_ID)}, private_key, algorithm='RS256')
 
 
+def webhook_url():
+    """Where GitHub currently sends this App's webhooks (one URL for every installation)."""
+    return _request('GET', f'{API}/app/hook/config', token=app_jwt()).json().get('url', '')
+
+
+def set_webhook_url(url):
+    """Point the App's webhook at url, signed with GITHUB_WEBHOOK_SECRET and with TLS verification on."""
+    config = {'url': url, 'content_type': 'json', 'insecure_ssl': '0', 'secret': settings.GITHUB_WEBHOOK_SECRET}
+    return _request('PATCH', f'{API}/app/hook/config', token=app_jwt(), json=config).json().get('url', '')
+
+
 def installation_token(installation_id):
     # shortcut: mints a fresh token on every call; cache it (~55 min) once review jobs call GitHub often
     response = _request('POST', f'{API}/app/installations/{installation_id}/access_tokens', token=app_jwt())
