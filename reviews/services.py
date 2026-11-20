@@ -76,6 +76,8 @@ def _upsert_pull_request(pr_event):
     return pull_request
 
 
+# shortcut: a run whose job the broker itself lost (e.g. Redis wiped) stays queued/running until another event
+# for that commit arrives; add a periodic sweeper (celery beat) that re-queues stale runs before production
 def _claimable(run, pull_request, redelivered):
     if run.status in DONE:
         return False
