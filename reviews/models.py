@@ -1,6 +1,9 @@
+from django.conf import settings
 from django.core.exceptions import ValidationError
 from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db import models
+
+from pgvector.django import VectorField
 
 from github_integration.models import Repository, WebhookDelivery
 
@@ -145,3 +148,20 @@ class Finding(models.Model):
 
     def __str__(self):
         return f'[{self.severity}] {self.title}'
+
+
+class CodeChunk(models.Model):
+    """A slice of a repository file and its embedding, for retrieval (filled in by the retrieval module)."""
+
+    repository = models.ForeignKey(Repository, on_delete=models.CASCADE, related_name='code_chunks')
+    file_path = models.CharField(max_length=500)
+    start_line = models.PositiveIntegerField()
+    end_line = models.PositiveIntegerField()
+    content = models.TextField()
+    content_hash = models.CharField(max_length=64, db_index=True)
+    commit_sha = models.CharField(max_length=40)
+    # settings.EMBEDDING_DIMENSIONS is the single source of truth; the embedder must read the same setting
+    embedding = VectorField(dimensions=settings.EMBEDDING_DIMENSIONS)
+
+    def __str__(self):
+        return f'{self.repository} {self.file_path}:{self.start_line}-{self.end_line}'

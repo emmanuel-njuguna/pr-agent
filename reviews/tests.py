@@ -8,6 +8,7 @@ from datetime import timedelta
 from unittest import mock
 
 import requests
+from django.conf import settings
 from django.core.cache import cache
 from django.core.exceptions import ValidationError
 from django.core.management import call_command
@@ -15,13 +16,14 @@ from django.db import DatabaseError, connection, transaction
 from django.test import TestCase, override_settings
 from django.urls import reverse
 from django.utils import timezone
+from pgvector.django import CosineDistance
 
 from github_integration import github_api
 from github_integration.models import GitHubConnection, PullRequestEvent, Repository, WebhookDelivery
 from github_integration.tests import make_connection, make_user
 
 from . import services
-from .models import AgentEvent, Finding, PullRequest, ReviewRun
+from .models import AgentEvent, CodeChunk, Finding, PullRequest, ReviewRun
 from .tasks import process_pr_event
 
 SHA_A, SHA_B = 'a' * 40, 'b' * 40
@@ -478,6 +480,27 @@ class OverviewRunStatusTests(WorkerTestCase):
         response = self.client.get(reverse('home'))
         self.assertContains(response, 'href="https://github.com/ada/app/pull/7"')
         self.assertContains(response, 'Posted')
+
+
+class CodeChunkTests(WorkerTestCase):
+    def chunk(self, embedding, path='a.py'):
+        return CodeChunk.objects.create(repository=self.repo, file_path=path, start_line=1, end_line=10, content='x',
+                                        content_hash='h', commit_sha=SHA_A, embedding=embedding)
+
+    def vector(self, hot):
+        values = [0.0] * settings.EMBEDDING_DIMENSIONS
+        values[hot] = 1.0
+        return values
+
+    def test_nearest_chunk_by_cosine_distance(self):
+        self.chunk(self.vector(0), 'near.py')
+        self.chunk(self.vector(1), 'far.py')
+        nearest = CodeChunk.objects.order_by(CosineDistance('embedding', self.vector(0))).first()
+        self.assertEqual(nearest.file_path, 'near.py')
+
+    def test_column_has_the_configured_dimensions(self):
+        with self.assertRaises(DatabaseError), transaction.atomic():
+            self.chunk([1.0, 0.0, 0.0])
 
 
 class MigrationsTests(TestCase):

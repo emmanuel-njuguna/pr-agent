@@ -1,6 +1,6 @@
 from django.contrib import admin
 
-from .models import AgentEvent, Finding, PullRequest, ReviewRun
+from .models import AgentEvent, CodeChunk, Finding, PullRequest, ReviewRun
 
 EVENT_FIELDS = ['timestamp', 'event_type', 'status', 'agent', 'model', 'tokens_in', 'tokens_out', 'cost',
                 'latency_ms', 'metadata']
@@ -56,3 +56,10 @@ class AgentEventAdmin(ReadOnlyMixin, admin.ModelAdmin):
 class FindingAdmin(admin.ModelAdmin):
     list_display = ['title', 'run', 'agent_type', 'severity', 'confidence', 'status']
     list_filter = ['agent_type', 'severity', 'status']
+
+
+@admin.register(CodeChunk)
+class CodeChunkAdmin(admin.ModelAdmin):
+    list_display = ['__str__', 'commit_sha', 'content_hash']
+    search_fields = ['file_path', 'repository__full_name']
+    exclude = ['embedding']  # thousands of floats: not useful on screen
