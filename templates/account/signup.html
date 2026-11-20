@@ -1,0 +1,52 @@
+{% extends "account/base_entrance.html" %}
+{% block head_title %}Create account{% endblock head_title %}
+{% block content %}
+  <div class="intro">
+    <h1>Create your account</h1>
+    <p>Sign up with GitHub or your email address.</p>
+  </div>
+
+  {% include "includes/github_button.html" with label="Sign up with GitHub" %}
+
+  <div class="divider">OR</div>
+
+  {% if form.non_field_errors %}
+    <div class="alert-error" role="alert">{% for error in form.non_field_errors %}<div>{{ error }}</div>{% endfor %}</div>
+  {% endif %}
+
+  <form class="form" method="post" action="{% url 'account_signup' %}">
+    {% csrf_token %}
+    <div class="field">
+      <label for="id_email">Email address</label>
+      <input class="input" id="id_email" name="email" type="email" autocomplete="email" placeholder="name@company.com" required
+             value="{{ form.email.value|default_if_none:'' }}"
+             {% if form.email.errors %}aria-invalid="true" aria-describedby="id_email_error"{% endif %}>
+      {% if form.email.errors %}<p class="error" id="id_email_error">{{ form.email.errors|join:" " }}</p>{% endif %}
+    </div>
+    <div class="field">
+      <label for="id_password1">Password</label>
+      <input class="input" id="id_password1" name="password1" type="password" autocomplete="new-password" required
+             aria-describedby="id_password1_hint{% if form.password1.errors %} id_password1_error{% endif %}"
+             {% if form.password1.errors %}aria-invalid="true"{% endif %}>
+      {% if form.password1.errors %}<p class="error" id="id_password1_error">{{ form.password1.errors|join:" " }}</p>{% endif %}
+      <p class="hint" id="id_password1_hint">At least 8 characters. Avoid common or all-number passwords.</p>
+    </div>
+    <div class="field">
+      <label for="id_password2">Confirm password</label>
+      <input class="input" id="id_password2" name="password2" type="password" autocomplete="new-password" required
+             {% if form.password2.errors %}aria-invalid="true" aria-describedby="id_password2_error"{% endif %}>
+      {% if form.password2.errors %}<p class="error" id="id_password2_error">{{ form.password2.errors|join:" " }}</p>{% endif %}
+    </div>
+    <div class="notice">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#0B5CAD" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"></circle><path d="M12 11v5"></path><path d="M12 8h.01"></path></svg>
+      <p>We'll send a confirmation link to your email. Confirm it before signing in.</p>
+    </div>
+    {{ redirect_field }}
+    <button class="btn btn-primary" type="submit">Create account</button>
+    {# shortcut: Terms/Privacy are placeholder links until those pages exist #}
+    <p class="legal">By continuing, you agree to our <a href="#">Terms</a> and <a href="#">Privacy Policy</a>.</p>
+  </form>
+{% endblock content %}
+{% block card_footer %}
+  <div class="card-footer">Already have an account? <a href="{{ login_url }}">Sign in</a></div>
+{% endblock card_footer %}

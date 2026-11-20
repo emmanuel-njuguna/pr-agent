@@ -1,0 +1,95 @@
+{% extends "app_base.html" %}
+{% block head_title %}Repositories{% endblock head_title %}
+{% block column_class %}column-wide{% endblock column_class %}
+{% block content %}
+  {% if connection.status == "needs_attention" %}
+    <div class="alert-error banner" role="alert">
+      <p><strong>pragent can't reach {{ connection.account_login }} on GitHub.</strong> The app was uninstalled or suspended, so new pull requests aren't being received.</p>
+      <a class="btn btn-primary btn-inline" href="{% url 'github:connect' %}">Reconnect GitHub</a>
+    </div>
+  {% endif %}
+
+  <section class="card connection" aria-label="GitHub connection">
+    <div class="connection-summary">
+      {% if connection.account_avatar_url %}<img class="avatar" src="{{ connection.account_avatar_url }}" alt="" width="48" height="48">{% endif %}
+      <div>
+        <h1 class="connection-title">
+          {{ connection.account_login }}
+          {% if connection.status == "active" %}<span class="badge badge-active">Active</span>{% else %}<span class="badge badge-attention">Needs attention</span>{% endif %}
+        </h1>
+        <p class="muted">{% if connection.account_type == "Organization" %}Organisation{% else %}Personal account{% endif %} · Connected {{ connection.created_at|date:"M j, Y" }}</p>
+      </div>
+    </div>
+    <div class="connection-actions">
+      <a class="btn btn-secondary btn-inline" href="{{ connection.manage_url }}" target="_blank" rel="noopener">Manage on GitHub</a>
+      <details class="disconnect">
+        <summary class="btn btn-secondary btn-inline">Disconnect</summary>
+        <div class="disconnect-panel">
+          <p>pragent stops monitoring every repository and forgets this connection.</p>
+          <form method="post" action="{% url 'github:disconnect' %}">
+            {% csrf_token %}
+            <button class="btn btn-danger" type="submit">Yes, disconnect</button>
+          </form>
+        </div>
+      </details>
+    </div>
+  </section>
+
+  <div class="notice scope-banner">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#0B5CAD" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"></circle><path d="M12 11v5"></path><path d="M12 8h.01"></path></svg>
+    <p>
+      {% if connection.monitor_all %}
+        Monitoring <strong>all repositories</strong> ({{ total_count }} today, plus any you add on GitHub later).
+      {% elif monitored_count %}
+        Monitoring <strong>{{ monitored_count }} selected repositor{{ monitored_count|pluralize:"y,ies" }}</strong>.
+      {% else %}
+        <strong>No repositories are being monitored.</strong> Choose at least one so pragent can review pull requests.
+      {% endif %}
+    </p>
+    <a class="btn btn-secondary btn-inline" href="{% url 'github:setup' %}">{% if connection.monitor_all or monitored_count %}Change{% else %}Choose repositories{% endif %}</a>
+  </div>
+
+  <section class="card" aria-labelledby="repositories-heading">
+    <div class="table-toolbar">
+      <h2 id="repositories-heading">Repositories</h2>
+      <form method="get" role="search">
+        <label class="sr-only" for="q">Search repositories</label>
+        <input class="input" id="q" type="search" name="q" value="{{ query }}" placeholder="Search repositories">
+      </form>
+    </div>
+    {% if page.object_list %}
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr><th scope="col">Repository</th><th scope="col">Visibility</th><th scope="col">Monitoring</th><th scope="col">Last pull request</th></tr>
+          </thead>
+          <tbody>
+            {% for repo in page %}
+              <tr>
+                <td class="repo-name">{{ repo.full_name }}</td>
+                <td><span class="badge">{% if repo.private %}Private{% else %}Public{% endif %}</span></td>
+                <td>{% if repo.is_monitored %}<span class="badge badge-active">Monitored</span>{% else %}<span class="badge badge-muted">Not monitored</span>{% endif %}</td>
+                <td>{% if repo.last_event_at %}<time datetime="{{ repo.last_event_at|date:'c' }}">{{ repo.last_event_at|timesince }} ago</time>{% else %}<span class="muted">None yet</span>{% endif %}</td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      {% if page.has_other_pages %}
+        <nav class="pagination" aria-label="Repository pages">
+          {% if page.has_previous %}<a href="?{% if query %}q={{ query|urlencode }}&amp;{% endif %}page={{ page.previous_page_number }}">← Previous</a>{% else %}<span></span>{% endif %}
+          <span>Page {{ page.number }} of {{ page.paginator.num_pages }}</span>
+          {% if page.has_next %}<a href="?{% if query %}q={{ query|urlencode }}&amp;{% endif %}page={{ page.next_page_number }}">Next →</a>{% else %}<span></span>{% endif %}
+        </nav>
+      {% endif %}
+    {% elif query %}
+      <div class="empty-state"><p>No repositories match "{{ query }}".</p><a href="{% url 'home' %}">Clear search</a></div>
+    {% else %}
+      <div class="empty-state">
+        <h3>No repositories yet</h3>
+        <p>Give pragent access to repositories on GitHub, then choose which ones it reviews.</p>
+        <a class="btn btn-primary btn-inline" href="{{ connection.manage_url }}" target="_blank" rel="noopener">Add repositories on GitHub</a>
+      </div>
+    {% endif %}
+  </section>
+{% endblock content %}

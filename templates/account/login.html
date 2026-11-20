@@ -1,0 +1,47 @@
+{% extends "account/base_entrance.html" %}
+{% block head_title %}Sign in{% endblock head_title %}
+{% block content %}
+  <div class="intro">
+    <h1>Sign in to pragent</h1>
+    <p>Use your GitHub account or email address.</p>
+  </div>
+
+  {% include "includes/github_button.html" with label="Continue with GitHub" %}
+
+  <div class="divider">OR</div>
+
+  {% if form.non_field_errors %}
+    <div class="alert-error" role="alert">{% for error in form.non_field_errors %}<div>{{ error }}</div>{% endfor %}</div>
+  {% endif %}
+
+  <form class="form" method="post" action="{% url 'account_login' %}">
+    {% csrf_token %}
+    <div class="field">
+      <label for="id_login">Email address</label>
+      <input class="input" id="id_login" name="login" type="email" autocomplete="email" placeholder="name@company.com" required
+             value="{{ form.login.value|default_if_none:'' }}"
+             {% if form.login.errors %}aria-invalid="true" aria-describedby="id_login_error"{% endif %}>
+      {% if form.login.errors %}<p class="error" id="id_login_error">{{ form.login.errors|join:" " }}</p>{% endif %}
+    </div>
+    <div class="field">
+      <div class="field-row">
+        <label for="id_password">Password</label>
+        <a href="{% url 'account_reset_password' %}">Forgot password?</a>
+      </div>
+      <input class="input" id="id_password" name="password" type="password" autocomplete="current-password" required
+             {% if form.password.errors %}aria-invalid="true" aria-describedby="id_password_error"{% endif %}>
+      {% if form.password.errors %}<p class="error" id="id_password_error">{{ form.password.errors|join:" " }}</p>{% endif %}
+    </div>
+    {% if form.remember %}
+      <div class="check">
+        <input id="id_remember" name="remember" type="checkbox" {% if form.remember.value %}checked{% endif %}>
+        <label for="id_remember">Keep me signed in</label>
+      </div>
+    {% endif %}
+    {{ redirect_field }}
+    <button class="btn btn-primary" type="submit">Sign in</button>
+  </form>
+{% endblock content %}
+{% block card_footer %}
+  <div class="card-footer">Don't have an account? <a href="{{ signup_url }}">Create one</a></div>
+{% endblock card_footer %}

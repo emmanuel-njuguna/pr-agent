@@ -1,0 +1,7 @@
+{% extends "allauth/layouts/base.html" %}
+{% block main %}
+  <div class="card">
+    <div class="card-body">{% block content %}{% endblock content %}</div>
+    {% block card_footer %}{% endblock card_footer %}
+  </div>
+{% endblock main %}

@@ -1,0 +1,10 @@
+{% extends "allauth/layouts/base.html" %}
+{% block header_actions %}
+  <div class="header-actions">
+    <span class="header-user">{{ user.email }}</span>
+    <form method="post" action="{% url 'account_logout' %}">
+      {% csrf_token %}
+      <button class="link-button" type="submit">Sign out</button>
+    </form>
+  </div>
+{% endblock header_actions %}

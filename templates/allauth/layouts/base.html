@@ -1,0 +1,39 @@
+{% load static %}<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block head_title %}{% endblock head_title %} · pragent</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap">
+  <link rel="stylesheet" href="{% static 'css/app.css' %}">
+  {% block extra_head %}{% endblock extra_head %}
+</head>
+<body>
+  <div class="page">
+    <header class="site-header">
+      <a class="brand" href="{% url 'home' %}"><span class="brand-mark" aria-hidden="true">p</span>pragent</a>
+      {% block header_actions %}{% endblock header_actions %}
+    </header>
+    <main class="site-main">
+      <div class="column {% block column_class %}{% endblock column_class %}">
+        {% if messages %}
+          <ul class="messages" role="status">
+            {% for message in messages %}<li class="message-{{ message.tags }}">{{ message }}</li>{% endfor %}
+          </ul>
+        {% endif %}
+        {% block main %}{% block content %}{% endblock content %}{% endblock main %}
+      </div>
+    </main>
+    <footer class="site-footer">
+      <span>© {% now "Y" %} pragent</span>
+      {# shortcut: placeholder links, point them at real pages once they exist #}
+      <a href="#">Privacy</a>
+      <a href="#">Terms</a>
+      <a href="#">Help</a>
+    </footer>
+  </div>
+  {% block extra_body %}{% endblock extra_body %}
+</body>
+</html>

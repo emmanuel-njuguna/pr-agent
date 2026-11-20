@@ -1,0 +1,106 @@
+{% extends "app_base.html" %}
+{% block head_title %}Connect GitHub{% endblock head_title %}
+{% block column_class %}column-medium{% endblock column_class %}
+{% block content %}
+  <ol class="stepper" aria-label="Setup progress">
+    <li class="{% if step == 1 %}current{% else %}done{% endif %}" {% if step == 1 %}aria-current="step"{% endif %}><span class="stepper-dot">1</span>Connect GitHub</li>
+    <li class="{% if step == 2 %}current{% endif %}" {% if step == 2 %}aria-current="step"{% endif %}><span class="stepper-dot">2</span>Choose repositories</li>
+    <li><span class="stepper-dot">3</span>Done</li>
+  </ol>
+
+  <div class="card">
+    <div class="card-body">
+      {% if step == 1 %}
+        <div class="intro">
+          <h1>Connect your GitHub account</h1>
+          <p>pragent reads pull requests and posts review comments on the repositories you choose. It never pushes code or changes your settings.</p>
+        </div>
+
+        {% if connection.status == "pending" %}
+          <div class="notice">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#0B5CAD" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"></circle><path d="M12 7v5l3 2"></path></svg>
+            <p>Waiting for an organisation admin to approve pragent on GitHub. Once they have, click <strong>Connect GitHub</strong> again to finish.</p>
+          </div>
+        {% elif connection.status == "needs_attention" %}
+          <div class="alert-error" role="alert">pragent lost access to {{ connection.account_login }}. Connect again to resume reviews.</div>
+        {% endif %}
+
+        <ol class="instructions">
+          <li><span><strong>Click "Connect GitHub".</strong> You'll be taken to GitHub.</span></li>
+          <li><span><strong>Choose the account or organisation</strong> that owns your repositories.</span></li>
+          <li><span><strong>Pick "All repositories" or "Only select repositories".</strong> This sets what pragent may access; you can narrow it further in the next step.</span></li>
+          <li><span><strong>Click "Install".</strong> In an organisation where you aren't an admin, the button says "Request" and an admin must approve.</span></li>
+          <li><span><strong>You'll come back here</strong> to choose which repositories pragent reviews.</span></li>
+        </ol>
+
+        {% if app_ready %}
+          <a class="btn btn-primary" href="{% url 'github:connect' %}">Connect GitHub</a>
+        {% else %}
+          <div class="alert-error" role="alert">The GitHub App isn't configured on this server yet. An administrator needs to set the <code>GITHUB_APP_*</code> environment variables.</div>
+        {% endif %}
+
+        <details class="help">
+          <summary>Having trouble?</summary>
+          <p><strong>Your organisation needs admin approval.</strong> Ask an organisation owner to approve the pragent request under the organisation's Settings › GitHub Apps, then connect again here.</p>
+          <p><strong>A repository is missing.</strong> pragent only sees repositories you granted on GitHub. Open the app's settings on GitHub, add the repository, and it appears here automatically.</p>
+        </details>
+      {% else %}
+        <div class="intro">
+          <h1>Choose repositories</h1>
+          <p>Connected to <strong>{{ connection.account_login }}</strong>. Choose which repositories pragent should review.</p>
+        </div>
+
+        <form class="form" method="post" action="{% url 'github:configure' %}">
+          {% csrf_token %}
+          <fieldset class="radio-cards">
+            <legend class="sr-only">Repositories to monitor</legend>
+            <label class="radio-card">
+              <input type="radio" name="scope" value="all" {% if connection.monitor_all %}checked{% endif %}>
+              <span><strong>All repositories</strong><span>Every repository pragent can access, including ones added later.</span></span>
+            </label>
+            <label class="radio-card">
+              <input type="radio" name="scope" value="selected" {% if not connection.monitor_all %}checked{% endif %}>
+              <span><strong>Selected repositories</strong><span>Only the repositories you tick below.</span></span>
+            </label>
+          </fieldset>
+
+          <div class="repo-picker" id="repo-picker">
+            <label class="sr-only" for="repo-search">Search repositories</label>
+            <input class="input" id="repo-search" type="search" placeholder="Search {{ repositories|length }} repositor{{ repositories|length|pluralize:'y,ies' }}">
+            <ul class="repo-list">
+              {% for repo in repositories %}
+                <li data-name="{{ repo.full_name|lower }}">
+                  <input type="checkbox" name="repositories" value="{{ repo.pk }}" id="repo-{{ repo.pk }}" {% if repo.monitored %}checked{% endif %}>
+                  <label for="repo-{{ repo.pk }}">{{ repo.full_name }}</label>
+                  <span class="badge">{% if repo.private %}Private{% else %}Public{% endif %}</span>
+                </li>
+              {% empty %}
+                <li class="empty">No repositories are shared with pragent yet. <a href="{{ connection.manage_url }}" target="_blank" rel="noopener">Add some on GitHub</a>.</li>
+              {% endfor %}
+            </ul>
+          </div>
+
+          <button class="btn btn-primary" type="submit">Save configuration</button>
+        </form>
+      {% endif %}
+    </div>
+  </div>
+{% endblock content %}
+{% block extra_body %}
+  {% if step == 2 %}
+    <script>
+      (() => {
+        const picker = document.getElementById('repo-picker');
+        const search = document.getElementById('repo-search');
+        const scopes = document.querySelectorAll('input[name="scope"]');
+        const sync = () => { picker.hidden = document.querySelector('input[name="scope"]:checked')?.value !== 'selected'; };
+        scopes.forEach((radio) => radio.addEventListener('change', sync));
+        search.addEventListener('input', () => {
+          const query = search.value.trim().toLowerCase();
+          picker.querySelectorAll('li[data-name]').forEach((row) => { row.hidden = !row.dataset.name.includes(query); });
+        });
+        sync();
+      })();
+    </script>
+  {% endif %}
+{% endblock extra_body %}
