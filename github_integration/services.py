@@ -3,7 +3,7 @@ from django.utils import timezone
 from . import github_api
 from .models import GitHubConnection, PullRequestEvent, Repository
 
-PULL_REQUEST_ACTIONS = {'opened', 'reopened', 'synchronize'}
+PULL_REQUEST_ACTIONS = {'opened', 'reopened', 'synchronize', 'ready_for_review'}
 
 
 def sync_repositories(connection):
@@ -24,11 +24,12 @@ def sync_repositories(connection):
 
 
 def handle_event(event, payload, delivery):
-    """Apply one verified webhook. Events for installations pragent doesn't know are ignored."""
+    """Apply one verified webhook. Returns the stored PullRequestEvent when there is a PR to review, else None.
+    Events for installations pragent doesn't know are ignored."""
     installation_id = (payload.get('installation') or {}).get('id')
     connection = GitHubConnection.objects.filter(installation_id=installation_id).first() if installation_id else None
     if connection is None:
-        return
+        return None
     action = payload.get('action')
 
     if event == 'installation':
@@ -37,7 +38,7 @@ def handle_event(event, payload, delivery):
         elif action in ('unsuspend', 'new_permissions_accepted'):
             connection.status = GitHubConnection.Status.ACTIVE
         else:
-            return
+            return None
         connection.save(update_fields=['status', 'updated_at'])
 
     elif event == 'installation_repositories':
@@ -59,11 +60,15 @@ def handle_event(event, payload, delivery):
                 full_name=repo_data['full_name'], private=repo_data['private'],
             )
         if repo is None or not repo.is_monitored:
-            return
+            return None
         pr = payload['pull_request']
-        PullRequestEvent.objects.create(
+        pr_event = PullRequestEvent.objects.create(
             repository=repo, delivery=delivery, action=action, number=pr['number'], title=pr['title'][:300],
             author_login=pr['user']['login'], html_url=pr['html_url'], head_sha=pr['head']['sha'],
+            base_ref=pr.get('base', {}).get('ref', ''), head_ref=pr['head'].get('ref', ''),
+            state=pr.get('state', ''), is_draft=bool(pr.get('draft')),
         )
         repo.last_event_at = timezone.now()
         repo.save(update_fields=['last_event_at'])
+        return pr_event
+    return None

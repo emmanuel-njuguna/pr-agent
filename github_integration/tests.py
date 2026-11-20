@@ -178,7 +178,7 @@ class WebhookTests(TestCase):
 
     def test_valid_signature_on_monitored_repo_records_event(self):
         response = self.send('pull_request', self.pull_request(10))
-        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.status_code, 202)
         event = PullRequestEvent.objects.get()
         self.assertEqual((event.repository.full_name, event.number, event.action), ('ada/app', 7, 'opened'))
         self.assertIsNotNone(event.repository.last_event_at)
@@ -192,7 +192,7 @@ class WebhookTests(TestCase):
 
     def test_duplicate_delivery_is_processed_once(self):
         self.send('pull_request', self.pull_request(10))
-        self.assertEqual(self.send('pull_request', self.pull_request(10)).status_code, 200)
+        self.assertEqual(self.send('pull_request', self.pull_request(10)).status_code, 202)
         self.assertEqual(PullRequestEvent.objects.count(), 1)
 
     def test_unmonitored_repo_is_ignored(self):
@@ -220,7 +220,7 @@ class WebhookTests(TestCase):
         signature = 'sha256=' + hmac.new(WEBHOOK_SECRET.encode(), body, hashlib.sha256).hexdigest()
         response = self.client.post('/github/webhook', body, content_type='application/json', HTTP_X_GITHUB_EVENT='pull_request',
                                     HTTP_X_GITHUB_DELIVERY='no-slash', HTTP_X_HUB_SIGNATURE_256=signature)
-        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.status_code, 202)
         self.assertEqual(PullRequestEvent.objects.count(), 1)
 
     def test_installation_repositories_added_and_removed(self):

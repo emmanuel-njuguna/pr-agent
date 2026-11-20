@@ -80,6 +80,10 @@ class PullRequestEvent(models.Model):
     author_login = models.CharField(max_length=100)
     html_url = models.URLField()
     head_sha = models.CharField(max_length=40)
+    base_ref = models.CharField(max_length=255, blank=True)
+    head_ref = models.CharField(max_length=255, blank=True)
+    state = models.CharField(max_length=20, blank=True)
+    is_draft = models.BooleanField(default=False)
     received_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
