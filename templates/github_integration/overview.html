@@ -21,6 +21,15 @@
       </div>
     </div>
     <div class="connection-actions">
+      {% if connection.status == "active" %}
+        <form class="refresh-form" method="post" action="{% url 'github:refresh' %}">
+          {% csrf_token %}
+          <button class="btn btn-secondary btn-inline" type="submit" title="Re-read the repository list from GitHub">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a9 9 0 11-2.64-6.36"></path><path d="M21 4v5h-5"></path></svg>
+            Refresh
+          </button>
+        </form>
+      {% endif %}
       <a class="btn btn-secondary btn-inline" href="{{ connection.manage_url }}" target="_blank" rel="noopener">Manage on GitHub</a>
       <details class="disconnect">
         <summary class="btn btn-secondary btn-inline">Disconnect</summary>
@@ -69,7 +78,19 @@
                 <td class="repo-name">{{ repo.full_name }}</td>
                 <td><span class="badge">{% if repo.private %}Private{% else %}Public{% endif %}</span></td>
                 <td>{% if repo.is_monitored %}<span class="badge badge-active">Monitored</span>{% else %}<span class="badge badge-muted">Not monitored</span>{% endif %}</td>
-                <td>{% if repo.last_event_at %}<time datetime="{{ repo.last_event_at|date:'c' }}">{{ repo.last_event_at|timesince }} ago</time>{% else %}<span class="muted">None yet</span>{% endif %}</td>
+                <td>
+                  {% with run=repo.latest_run %}
+                    {% if run %}
+                      <a href="{{ run.pull_request.html_url }}" target="_blank" rel="noopener">#{{ run.pull_request.number }}</a>
+                      <span class="badge {% if run.status == 'posted' %}badge-active{% elif run.status == 'failed' %}badge-attention{% else %}badge-muted{% endif %}" title="Review of {{ run.head_sha|slice:':7' }}">{{ run.get_status_display }}</span>
+                      <span class="muted">{{ run.created_at|timesince }} ago</span>
+                    {% elif repo.last_event_at %}
+                      <time datetime="{{ repo.last_event_at|date:'c' }}">{{ repo.last_event_at|timesince }} ago</time>
+                    {% else %}
+                      <span class="muted">None yet</span>
+                    {% endif %}
+                  {% endwith %}
+                </td>
               </tr>
             {% endfor %}
           </tbody>

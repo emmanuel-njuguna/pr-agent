@@ -11,6 +11,7 @@ https://docs.djangoproject.com/en/6.1/ref/settings/
 """
 
 import os
+import sys
 from pathlib import Path
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
@@ -52,6 +53,7 @@ INSTALLED_APPS = [
     'allauth.socialaccount.providers.github',
     'accounts',
     'github_integration',
+    'reviews',
 ]
 
 MIDDLEWARE = [
@@ -88,10 +90,29 @@ WSGI_APPLICATION = 'pragent.wsgi.application'
 # Database
 # https://docs.djangoproject.com/en/6.1/ref/settings/#databases
 
+TESTING = sys.argv[1:2] == ['test']
+
+# Postgres (pgvector is needed for code embeddings). With DB_HOST empty, psycopg uses the local
+# socket and peer authentication, so local development needs no password.
 DATABASES = {
     'default': {
-        'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': BASE_DIR / 'db.sqlite3',
+        'ENGINE': 'django.db.backends.postgresql',
+        'NAME': os.environ.get('DB_NAME', 'pragent'),
+        'USER': os.environ.get('DB_USER', ''),
+        'PASSWORD': os.environ.get('DB_PASSWORD', ''),
+        'HOST': os.environ.get('DB_HOST', ''),
+        'PORT': os.environ.get('DB_PORT', ''),
+    }
+}
+
+REDIS_URL = os.environ.get('REDIS_URL', 'redis://localhost:6379/0')
+
+# Installation tokens are cached here. Tests use local memory so they never need Redis.
+CACHES = {
+    'default': {'BACKEND': 'django.core.cache.backends.locmem.LocMemCache'} if TESTING else {
+        'BACKEND': 'django.core.cache.backends.redis.RedisCache',
+        'LOCATION': REDIS_URL,
+        'KEY_PREFIX': 'pragent',
     }
 }
 
@@ -183,3 +204,32 @@ GITHUB_APP_CLIENT_ID = os.environ.get('GITHUB_APP_CLIENT_ID', '')
 GITHUB_APP_CLIENT_SECRET = os.environ.get('GITHUB_APP_CLIENT_SECRET', '')
 GITHUB_APP_PRIVATE_KEY_PATH = os.environ.get('GITHUB_APP_PRIVATE_KEY_PATH', '')
 GITHUB_WEBHOOK_SECRET = os.environ.get('GITHUB_WEBHOOK_SECRET', '')
+# Public address of this deployment; `manage.py github_webhook --set` points GitHub's webhooks here
+PUBLIC_BASE_URL = os.environ.get('PUBLIC_BASE_URL', '')
+
+# Celery: run a worker with `celery -A pragent worker -l info`
+CELERY_BROKER_URL = os.environ.get('CELERY_BROKER_URL', REDIS_URL)
+CELERY_TASK_ACKS_LATE = True  # a task lost with its worker is redelivered, not dropped
+CELERY_TASK_REJECT_ON_WORKER_LOST = True
+CELERY_WORKER_PREFETCH_MULTIPLIER = 1
+CELERY_BROKER_TRANSPORT_OPTIONS = {'visibility_timeout': 3600}  # must exceed the longest retry countdown
+CELERY_TASK_ALWAYS_EAGER = TESTING  # tests never talk to a broker
+
+# Review runs
+REVIEW_MAX_FILES = int(os.environ.get('REVIEW_MAX_FILES', 50))
+REVIEW_MAX_CHANGED_LINES = int(os.environ.get('REVIEW_MAX_CHANGED_LINES', 2000))
+REVIEW_TASK_SOFT_TIME_LIMIT = 120  # seconds; the hard limit kills the task 30s later
+REVIEW_TASK_TIME_LIMIT = 150
+# reason -> filename globs (matched against the full path and the file name)
+REVIEW_SKIP_PATTERNS = {
+    'lockfile': ['package-lock.json', 'yarn.lock', 'pnpm-lock.yaml', 'poetry.lock', 'Pipfile.lock', 'uv.lock',
+                 'Cargo.lock', 'composer.lock', 'Gemfile.lock', 'go.sum', '*.lock'],
+    'minified': ['*.min.js', '*.min.css', '*.map'],
+    'generated': ['*_pb2.py', '*_pb2_grpc.py', '*.pb.go', '*.generated.*', 'dist/*', 'build/*'],
+    'vendored': ['vendor/*', '*/vendor/*', 'node_modules/*', '*/node_modules/*', 'third_party/*'],
+    'binary': ['*.png', '*.jpg', '*.jpeg', '*.gif', '*.ico', '*.webp', '*.pdf', '*.zip', '*.gz', '*.jar',
+               '*.woff', '*.woff2', '*.ttf', '*.eot', '*.so', '*.dll', '*.exe', '*.bin'],
+}
+
+# One value for the CodeChunk column and any embedder, so they can't disagree
+EMBEDDING_DIMENSIONS = int(os.environ.get('EMBEDDING_DIMENSIONS', 1536))

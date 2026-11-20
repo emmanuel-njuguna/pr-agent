@@ -11,9 +11,13 @@ from django.core.paginator import Paginator
 from django.db import IntegrityError, transaction
 from django.http import HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
+from django.urls import reverse
 from django.utils import timezone
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_POST
+
+from reviews.models import ReviewRun
+from reviews.tasks import process_pr_event
 
 from . import github_api
 from .models import GitHubConnection, WebhookDelivery
@@ -39,6 +43,13 @@ def overview(request):
     if query:
         repositories = repositories.filter(full_name__icontains=query)
     page = Paginator(repositories, 25).get_page(request.GET.get('page'))
+    # latest run per repository on this page, in one query (DISTINCT ON)
+    latest_runs = ReviewRun.objects.filter(pull_request__repository__in=page.object_list) \
+        .order_by('pull_request__repository_id', '-created_at').distinct('pull_request__repository_id') \
+        .select_related('pull_request')
+    runs_by_repo = {run.pull_request.repository_id: run for run in latest_runs}
+    for repo in page.object_list:
+        repo.latest_run = runs_by_repo.get(repo.pk)
     return render(request, 'github_integration/overview.html', {
         'connection': connection,
         'page': page,
@@ -146,6 +157,20 @@ def configure(request):
 
 @login_required
 @require_POST
+def refresh(request):
+    """Re-read the repository list from GitHub, for when a webhook was missed."""
+    connection = get_object_or_404(GitHubConnection, user=request.user, status=Status.ACTIVE)
+    try:
+        sync_repositories(connection)
+    except github_api.GitHubError:
+        messages.error(request, "We couldn't reach GitHub to refresh your repositories. Please try again.")
+    else:
+        messages.success(request, 'Repository list refreshed from GitHub.')
+    return redirect(request.POST.get('next') if request.POST.get('next') == reverse('github:setup') else 'home')
+
+
+@login_required
+@require_POST
 def disconnect(request):
     GitHubConnection.objects.filter(user=request.user).delete()
     messages.info(request, "Disconnected. To remove pragent's access completely, uninstall the app in your GitHub settings.")
@@ -172,12 +197,13 @@ def webhook(request):
     if not delivery_id or not isinstance(payload, dict):
         return HttpResponse(status=400)
 
-    # shortcut: processed inside the request; move to a task queue once review jobs exist
+    # Only cheap bookkeeping happens here; the review itself runs on the worker. The unique delivery_id
+    # deduplicates redeliveries, and the job is queued only once this transaction has committed.
     try:
         with transaction.atomic():
             delivery, created = WebhookDelivery.objects.get_or_create(delivery_id=delivery_id, defaults={'event': event})
-            if created:
-                handle_event(event, payload, delivery)
+            if created and handle_event(event, payload, delivery) is not None:
+                transaction.on_commit(lambda: process_pr_event.delay(delivery_id))
     except (KeyError, TypeError):
         return HttpResponse(status=400)
-    return HttpResponse(status=200)
+    return HttpResponse(status=202)
