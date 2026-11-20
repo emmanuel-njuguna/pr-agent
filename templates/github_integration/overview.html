@@ -52,10 +52,18 @@
   <section class="card" aria-labelledby="repositories-heading">
     <div class="table-toolbar">
       <h2 id="repositories-heading">Repositories</h2>
-      <form method="get" role="search">
-        <label class="sr-only" for="q">Search repositories</label>
-        <input class="input" id="q" type="search" name="q" value="{{ query }}" placeholder="Search repositories">
-      </form>
+      <div class="toolbar-actions">
+        <form method="get" role="search">
+          <label class="sr-only" for="q">Search repositories</label>
+          <input class="input" id="q" type="search" name="q" value="{{ query }}" placeholder="Search repositories">
+        </form>
+        {% if connection.status == "active" %}
+          <form class="refresh-form" method="post" action="{% url 'github:refresh' %}">
+            {% csrf_token %}
+            <button class="btn btn-secondary btn-inline btn-compact" type="submit" title="Re-read the repository list from GitHub">Refresh</button>
+          </form>
+        {% endif %}
+      </div>
     </div>
     {% if page.object_list %}
       <div class="table-wrap">

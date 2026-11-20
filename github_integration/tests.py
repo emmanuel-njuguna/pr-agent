@@ -212,6 +212,15 @@ class WebhookTests(TestCase):
         self.connection.refresh_from_db()
         self.assertEqual(self.connection.status, GitHubConnection.Status.NEEDS_ATTENTION)
 
+    def test_url_without_trailing_slash_is_accepted(self):
+        # smee-client strips the trailing slash; this used to be a 500 from APPEND_SLASH
+        body = json.dumps(self.pull_request(10)).encode()
+        signature = 'sha256=' + hmac.new(WEBHOOK_SECRET.encode(), body, hashlib.sha256).hexdigest()
+        response = self.client.post('/github/webhook', body, content_type='application/json', HTTP_X_GITHUB_EVENT='pull_request',
+                                    HTTP_X_GITHUB_DELIVERY='no-slash', HTTP_X_HUB_SIGNATURE_256=signature)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(PullRequestEvent.objects.count(), 1)
+
     def test_installation_repositories_added_and_removed(self):
         self.send('installation_repositories', {
             'action': 'added', 'installation': {'id': 42},
@@ -219,6 +228,32 @@ class WebhookTests(TestCase):
             'repositories_removed': [{'id': 11}],
         })
         self.assertEqual(sorted(self.connection.repositories.values_list('full_name', flat=True)), ['ada/app', 'ada/new'])
+
+
+class RefreshTests(TestCase):
+    def setUp(self):
+        self.user = make_user('ada@example.com')
+        self.connection = make_connection(self.user, 42, repos=[(10, 'ada/app')], monitor_all=True)
+        self.client.force_login(self.user)
+
+    @mock.patch.object(github_api, 'installation_repositories', return_value=[
+        {'id': 10, 'full_name': 'ada/app', 'private': True}, {'id': 12, 'full_name': 'ada/new-repo', 'private': False},
+    ])
+    def test_refresh_picks_up_a_newly_created_repository(self, _):
+        response = self.client.post(reverse('github:refresh'))
+        self.assertRedirects(response, reverse('home'))
+        self.assertEqual(sorted(self.connection.repositories.values_list('full_name', flat=True)), ['ada/app', 'ada/new-repo'])
+        self.assertTrue(self.connection.repositories.get(github_id=12).is_monitored)
+
+    @mock.patch.object(github_api, 'installation_repositories', side_effect=github_api.GitHubError('down', 502))
+    def test_refresh_keeps_repositories_when_github_is_down(self, _):
+        self.client.post(reverse('github:refresh'))
+        self.assertEqual(self.connection.repositories.count(), 1)
+
+    def test_refresh_only_goes_back_to_setup_never_elsewhere(self):
+        with mock.patch.object(github_api, 'installation_repositories', return_value=[]):
+            response = self.client.post(reverse('github:refresh'), {'next': 'https://evil.example/'})
+        self.assertRedirects(response, reverse('home'))
 
 
 class SecretsTests(TestCase):

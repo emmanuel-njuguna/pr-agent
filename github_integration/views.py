@@ -11,6 +11,7 @@ from django.core.paginator import Paginator
 from django.db import IntegrityError, transaction
 from django.http import HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
+from django.urls import reverse
 from django.utils import timezone
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_POST
@@ -142,6 +143,20 @@ def configure(request):
         connection.save(update_fields=['monitor_all', 'configured_at', 'updated_at'])
     messages.success(request, 'GitHub configuration saved.')
     return redirect('home')
+
+
+@login_required
+@require_POST
+def refresh(request):
+    """Re-read the repository list from GitHub, for when a webhook was missed."""
+    connection = get_object_or_404(GitHubConnection, user=request.user, status=Status.ACTIVE)
+    try:
+        sync_repositories(connection)
+    except github_api.GitHubError:
+        messages.error(request, "We couldn't reach GitHub to refresh your repositories. Please try again.")
+    else:
+        messages.success(request, 'Repository list refreshed from GitHub.')
+    return redirect(request.POST.get('next') if request.POST.get('next') == reverse('github:setup') else 'home')
 
 
 @login_required

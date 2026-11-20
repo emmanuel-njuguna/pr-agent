@@ -80,7 +80,17 @@
             </ul>
           </div>
 
+          <p class="picker-meta">
+            <span>Missing a repository you just created?</span>
+            <button class="link-button" type="submit" form="refresh-form">Refresh from GitHub</button>
+          </p>
+
           <button class="btn btn-primary" type="submit">Save configuration</button>
+        </form>
+        {# outside the configure form: HTML forms can't nest, the button above targets it by id #}
+        <form id="refresh-form" method="post" action="{% url 'github:refresh' %}" hidden>
+          {% csrf_token %}
+          <input type="hidden" name="next" value="{% url 'github:setup' %}">
         </form>
       {% endif %}
     </div>
