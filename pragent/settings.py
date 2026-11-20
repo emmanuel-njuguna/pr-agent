@@ -183,3 +183,5 @@ GITHUB_APP_CLIENT_ID = os.environ.get('GITHUB_APP_CLIENT_ID', '')
 GITHUB_APP_CLIENT_SECRET = os.environ.get('GITHUB_APP_CLIENT_SECRET', '')
 GITHUB_APP_PRIVATE_KEY_PATH = os.environ.get('GITHUB_APP_PRIVATE_KEY_PATH', '')
 GITHUB_WEBHOOK_SECRET = os.environ.get('GITHUB_WEBHOOK_SECRET', '')
+# Public address of this deployment; `manage.py github_webhook --set` points GitHub's webhooks here
+PUBLIC_BASE_URL = os.environ.get('PUBLIC_BASE_URL', '')

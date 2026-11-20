@@ -1,4 +1,4 @@
-from django.urls import path, re_path
+from django.urls import path
 
 from . import views
 
@@ -11,6 +11,7 @@ urlpatterns = [
     path('configure/', views.configure, name='configure'),
     path('refresh/', views.refresh, name='refresh'),
     path('disconnect/', views.disconnect, name='disconnect'),
-    # trailing slash optional: relays such as smee-client strip it, and APPEND_SLASH can't redirect a POST
-    re_path(r'^webhook/?$', views.webhook, name='webhook'),
+    path('webhook/', views.webhook, name='webhook'),
+    # relays such as smee-client strip the trailing slash, and APPEND_SLASH can't redirect a POST
+    path('webhook', views.webhook),
 ]

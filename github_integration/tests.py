@@ -1,5 +1,6 @@
 import hashlib
 import hmac
+import io
 import json
 import tempfile
 from unittest import mock
@@ -9,6 +10,7 @@ from allauth.account.models import EmailAddress
 from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric import rsa
 from django.apps import apps
+from django.core.management import CommandError, call_command
 from django.test import TestCase, override_settings
 from django.urls import reverse
 from django.utils import timezone
@@ -254,6 +256,37 @@ class RefreshTests(TestCase):
         with mock.patch.object(github_api, 'installation_repositories', return_value=[]):
             response = self.client.post(reverse('github:refresh'), {'next': 'https://evil.example/'})
         self.assertRedirects(response, reverse('home'))
+
+
+@override_settings(GITHUB_APP_ID='1', GITHUB_APP_PRIVATE_KEY_PATH='/k.pem', GITHUB_WEBHOOK_SECRET=WEBHOOK_SECRET)
+class WebhookCommandTests(TestCase):
+    def run_command(self, *args):
+        out = io.StringIO()
+        call_command('github_webhook', *args, stdout=out)
+        return out.getvalue()
+
+    @mock.patch.object(github_api, 'set_webhook_url', side_effect=lambda url: url)
+    def test_set_points_github_at_this_application(self, set_webhook_url):
+        out = self.run_command('--set', 'https://pragent.example.com/')
+        set_webhook_url.assert_called_once_with('https://pragent.example.com/github/webhook/')
+        self.assertIn('https://pragent.example.com/github/webhook/', out)
+
+    @override_settings(PUBLIC_BASE_URL='https://pragent.example.com')
+    @mock.patch.object(github_api, 'set_webhook_url', side_effect=lambda url: url)
+    def test_set_defaults_to_public_base_url(self, set_webhook_url):
+        self.run_command('--set')
+        set_webhook_url.assert_called_once_with('https://pragent.example.com/github/webhook/')
+
+    @mock.patch.object(github_api, 'set_webhook_url')
+    def test_refuses_plain_http_and_localhost(self, set_webhook_url):
+        for base_url in ('http://pragent.example.com', 'https://localhost:8000', 'pragent.example.com'):
+            with self.assertRaises(CommandError):
+                self.run_command('--set', base_url)
+        set_webhook_url.assert_not_called()
+
+    @mock.patch.object(github_api, 'webhook_url', return_value='https://smee.io/abc')
+    def test_without_set_only_shows_the_current_url(self, _):
+        self.assertIn('https://smee.io/abc', self.run_command())
 
 
 class SecretsTests(TestCase):
